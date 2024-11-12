@@ -1,7 +1,14 @@
 pfsense-wan-monitor
 ===================
 
-A script that runs on pfSense monitoring selected gateways and attempts to fix them if they are offline or exhibit high packet loss.
+A Python script designed to monitor the pfSense gateways by periodically checking gateway statuses. It identifies packet loss for specified WAN connections and executes configured commands to restart or renew DHCP when packet loss exceeds specified thresholds.
+
+## Features
+
+- Monitors multiple WAN connections at configurable intervals.
+- Detects packet loss and issues warnings if loss exceeds defined thresholds.
+- Automatically executes custom commands to restart a WAN or renew DHCP when necessary.
+- Logs activity to a rotating log file for easy troubleshooting.
 
 Usage
 -----
