@@ -12,6 +12,12 @@ To install the script, run this one-line command, which downloads the install sc
   fetch -o - https://raw.githubusercontent.com/sirstudly/pfsense-wan-monitor/refs/heads/master/install-wanmonitor.sh | sh -s
 ```
 
+Configuration
+---------------------
+
+Update `/usr/local/wanmonitor/wanmonitor.ini` with the correct commands to restart interfaces and to renew DHCP leases.
+You can also configure the polling interval and the packet loss thresholds to hit before resetting the connection.
+
 Starting and Stopping
 ---------------------
 
