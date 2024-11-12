@@ -63,7 +63,7 @@ def check_wan_status():
     Executes the gateway status command and checks for packet loss on each specified WAN.
     """
     try:
-        result = subprocess.run(['pfSsh.php', 'playback', 'gatewaystatus'],
+        result = subprocess.run(['/usr/local/sbin/pfSsh.php', 'playback', 'gatewaystatus'],
                                 capture_output=True, text=True, check=True)
         LOGGER.debug("Gateway status output:\n" + result.stdout)
         wan_status = {name: (loss, status) for name, loss, status in parse_gatewaystatus_output(result.stdout)}
