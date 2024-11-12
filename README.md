@@ -9,7 +9,7 @@ Usage
 To install the script, run this one-line command, which downloads the install script from Github and executes it with sh:
 
 ```
-  fetch -o - https://github.com/sirstudly/.../install-wanmonitor.sh | sh -s
+  fetch -o - https://raw.githubusercontent.com/sirstudly/pfsense-wan-monitor/refs/heads/master/install-wanmonitor.sh | sh -s
 ```
 
 Starting and Stopping

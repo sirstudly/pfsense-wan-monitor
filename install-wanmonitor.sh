@@ -1,9 +1,16 @@
 #!/bin/sh
 
-/usr/bin/fetch -o /usr/local/etc/rc.d/wanmonitor.sh ${FIXME-wanmonitor.sh}
+/usr/bin/fetch -o /usr/local/etc/rc.d/wanmonitor.sh https://raw.githubusercontent.com/sirstudly/pfsense-wan-monitor/refs/heads/master/rc.d/wanmonitor.sh
 
 # Fix permissions so it'll run
 chmod +x /usr/local/etc/rc.d/wanmonitor.sh
+
+# Copy python script and config to /usr/local/wanmonitor
+echo -n "Copying files..."
+mkdir -p /usr/local/wanmonitor
+/usr/bin/fetch -o /usr/local/wanmonitor/wanmonitor.py https://raw.githubusercontent.com/sirstudly/pfsense-wan-monitor/refs/heads/master/wanmonitor.py
+/usr/bin/fetch -o /usr/local/wanmonitor/wanmonitor.ini https://raw.githubusercontent.com/sirstudly/pfsense-wan-monitor/refs/heads/master/wanmonitor.ini
+echo " done. Configure /usr/local/wanmonitor/wanmonitor.ini manually."
 
 # Add the startup variable to rc.conf.local.
 # In the following comparison, we expect the 'or' operator to short-circuit, to make sure the file exists and avoid grep throwing an error.

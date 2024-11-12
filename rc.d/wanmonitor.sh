@@ -22,7 +22,8 @@ wanmonitor_start()
 
     # The process will run until it is terminated and does not fork on its own.
     # So we start it in the background and stash the pid:
-    python /root/wanmonitor/wanmonitor.py &
+    cd /usr/local/wanmonitor
+    python wanmonitor.py &
     echo $! > $pidfile
 
   fi
