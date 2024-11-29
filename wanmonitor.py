@@ -2,6 +2,7 @@ import subprocess
 import time
 import configparser
 import logging
+from collections import deque
 from logging.handlers import TimedRotatingFileHandler
 
 # Global configuration variables
@@ -11,7 +12,7 @@ LOSS_THRESHOLD = 50.0
 CONSECUTIVE_CHECKS = 3
 LOG_FILE = "wanmonitor.log"
 LOGGER = logging.getLogger("WANMonitor")
-LOSS_COUNTS = []
+LOSS_HISTORY = deque()
 LOSS_100_COUNTS = []
 RESTART_WAN_COMMANDS = []
 RENEW_DHCP_COMMANDS = []
@@ -19,7 +20,8 @@ RENEW_DHCP_COMMANDS = []
 
 # Load configurations function
 def load_config():
-    global WAN_NAMES, INTERVAL, LOSS_THRESHOLD, CONSECUTIVE_CHECKS, LOG_FILE, LOGGER, LOSS_COUNTS, LOSS_100_COUNTS, RESTART_WAN_COMMANDS, RENEW_DHCP_COMMANDS
+    global WAN_NAMES, INTERVAL, LOSS_THRESHOLD, CONSECUTIVE_CHECKS, LOG_FILE, LOGGER, \
+        LOSS_HISTORY, LOSS_100_COUNTS, RESTART_WAN_COMMANDS, RENEW_DHCP_COMMANDS
     config = configparser.ConfigParser()
     config.read('wanmonitor.ini')
 
@@ -29,9 +31,10 @@ def load_config():
     CONSECUTIVE_CHECKS = config['Settings'].getint('consecutive_checks', CONSECUTIVE_CHECKS)
     LOG_FILE = config['Settings'].get('log_file', LOG_FILE)
 
-    # Track consecutive losses and 100% loss counts for each WAN
-    LOSS_COUNTS = {wan_name.strip(): 0 for wan_name in WAN_NAMES}
+    # Track sliding loss values for each WAN
+    LOSS_HISTORY = {wan_name.strip(): deque(maxlen=CONSECUTIVE_CHECKS) for wan_name in WAN_NAMES}
     LOSS_100_COUNTS = {wan_name.strip(): 0 for wan_name in WAN_NAMES}
+
     RESTART_WAN_COMMANDS = {wan_name.strip(): config[wan_name.strip()].get('restart_wan_command') if wan_name.strip() in config else f"echo 'restart_wan_command[{wan_name.strip()}] is not configured!" for wan_name in WAN_NAMES}
     RENEW_DHCP_COMMANDS = {wan_name.strip(): config[wan_name.strip()].get('renew_dhcp_command') if wan_name.strip() in config else f"echo 'renew_dhcp_command[{wan_name.strip()}] is not configured!" for wan_name in WAN_NAMES}
 
@@ -58,6 +61,13 @@ def parse_gatewaystatus_output(output):
         yield name, loss, status
 
 
+def calculate_sliding_average(loss_values):
+    """
+    Calculates the average from the deque of recent loss values.
+    """
+    return sum(loss_values) / len(loss_values) if loss_values else 0.0
+
+
 def check_wan_status():
     """
     Executes the gateway status command and checks for packet loss on each specified WAN.
@@ -68,39 +78,47 @@ def check_wan_status():
         LOGGER.debug("Gateway status output:\n" + result.stdout)
         wan_status = {name: (loss, status) for name, loss, status in parse_gatewaystatus_output(result.stdout)}
 
-        for wan_name in LOSS_COUNTS.keys():
+        for wan_name in WAN_NAMES:
             if wan_name in wan_status:
                 current_loss, current_status = wan_status[wan_name]
                 LOGGER.info(f"Current packet loss for {wan_name}: {current_loss}% (Status: {current_status})")
 
-                # Only increment loss count if loss is above threshold
-                if current_loss > LOSS_THRESHOLD:
-                    if current_loss == 100.0:
-                        LOSS_100_COUNTS[wan_name] += 1
-                    else:
-                        LOSS_100_COUNTS[wan_name] = 0  # Reset 100% loss count if loss is not 100%
+                # Update loss history for sliding average
+                LOSS_HISTORY[wan_name].append(current_loss)
 
-                    LOSS_COUNTS[wan_name] += 1
-                    LOGGER.warning(f"{wan_name} packet loss exceeded threshold with status '{current_status}'! "
-                                   f"Count: {LOSS_COUNTS[wan_name]}/{CONSECUTIVE_CHECKS}")
-                else:  # Reset loss counts if loss is below threshold
-                    LOSS_COUNTS[wan_name] = 0
-                    LOSS_100_COUNTS[wan_name] = 0
+                # Calculate sliding average
+                average_loss = calculate_sliding_average(LOSS_HISTORY[wan_name])
+                LOGGER.info(f"Sliding average packet loss for {wan_name}: {average_loss:.2f}%")
 
-                # If 100% loss count reached consecutive threshold, reset interface
+                # If loss is exactly 100%, track it separately
+                if current_loss == 100.0:
+                    LOSS_100_COUNTS[wan_name] += 1
+                else:
+                    LOSS_100_COUNTS[wan_name] = 0  # Reset 100% loss count if loss is not 100%
+
+                # Trigger actions based on thresholds
+                if average_loss > LOSS_THRESHOLD and current_status == "online":
+                    LOGGER.warning(f"{wan_name} average packet loss exceeds threshold ({average_loss:.2f}% > {LOSS_THRESHOLD}%)!")
+                    if len(LOSS_HISTORY[wan_name]) == CONSECUTIVE_CHECKS:
+                        restart_wan(wan_name)
+                        reset_metrics(wan_name)
+
+                # If 100% loss persists for consecutive checks, reset interface
                 if LOSS_100_COUNTS[wan_name] >= CONSECUTIVE_CHECKS:
                     release_renew_dhcp(wan_name)
-                    LOSS_100_COUNTS[wan_name] = 0  # Reset after action
-                    LOSS_COUNTS[wan_name] = 0
-                # If loss exceeded threshold for consecutive checks, restart WAN device
-                elif LOSS_COUNTS[wan_name] >= CONSECUTIVE_CHECKS:
-                    restart_wan(wan_name)
-                    LOSS_100_COUNTS[wan_name] = 0  # Reset after action
-                    LOSS_COUNTS[wan_name] = 0  # Reset after action
+                    reset_metrics(wan_name)
             else:
                 LOGGER.error(f"WAN '{wan_name}' not found in gateway status output.")
     except subprocess.CalledProcessError as e:
         LOGGER.error(f"Error executing gateway status command: {e}")
+
+
+def reset_metrics(wan_name):
+    """
+    Resets cumulative metrics for the specified WAN.
+    """
+    LOSS_HISTORY[wan_name].clear()
+    LOSS_100_COUNTS[wan_name] = 0
 
 
 def restart_wan(wan_name):
