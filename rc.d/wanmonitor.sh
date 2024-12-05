@@ -12,37 +12,52 @@ start_cmd="wanmonitor_start"
 stop_cmd="wanmonitor_stop"
 
 pidfile="/var/run/${name}.pid"
+workdir="/usr/local/wanmonitor"
+command="/usr/local/bin/python3.11 ${workdir}/wanmonitor.py"
 
 load_rc_config ${name}
 
-wanmonitor_start()
-{
+wanmonitor_start() {
   if checkyesno ${rcvar}; then
-    echo "Starting Wan Monitor. "
+    echo "Starting Wan Monitor."
 
-    # The process will run until it is terminated and does not fork on its own.
-    # So we start it in the background and stash the pid:
-    cd /usr/local/wanmonitor
-    /usr/local/bin/python3.11 wanmonitor.py &
-    echo $! > $pidfile
+    # Check if the process is already running
+    if [ -f "${pidfile}" ] && kill -0 "$(cat ${pidfile})" 2>/dev/null; then
+      echo "${name} is already running as PID $(cat ${pidfile})."
+      return 1
+    fi
 
+    # Start the process in the background and save its PID
+    cd "${workdir}"
+    ${command} &
+    echo $! > ${pidfile}
+
+    # Validate that the PID file was written and process is running
+    if ! kill -0 "$(cat ${pidfile})" 2>/dev/null; then
+      echo "Failed to start ${name}."
+      rm -f ${pidfile}
+      return 1
+    fi
+
+    echo "${name} started with PID $(cat ${pidfile})."
   fi
 }
 
-wanmonitor_stop()
-{
+wanmonitor_stop() {
+  if [ -f "${pidfile}" ]; then
+    pid=$(cat ${pidfile})
 
-  if [ -f $pidfile ]; then
-    echo -n "Stopping Wan Monitor..."
+    echo "Stopping Wan Monitor (PID ${pid})..."
 
-    kill `pgrep -F $pidfile`
+    # Gracefully stop the process
+    kill "${pid}" && wait "${pid}" 2>/dev/null
 
-    # Remove the pid file:
-    rm $pidfile
+    # Remove the PID file
+    rm -f "${pidfile}"
 
-    echo " stopped.";
+    echo "${name} stopped."
   else
-    echo "There is no pid file. The process may not be running."
+    echo "No PID file found. ${name} may not be running."
   fi
 }
 
