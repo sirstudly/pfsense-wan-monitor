@@ -102,11 +102,13 @@ def check_wan_status():
                     if len(LOSS_HISTORY[wan_name]) == CONSECUTIVE_CHECKS:
                         restart_wan(wan_name)
                         reset_metrics(wan_name)
+                        time.sleep(30)
 
                 # If 100% loss persists for consecutive checks, reset interface
                 if LOSS_100_COUNTS[wan_name] >= CONSECUTIVE_CHECKS:
                     release_renew_dhcp(wan_name)
                     reset_metrics(wan_name)
+                    time.sleep(30)
             else:
                 LOGGER.error(f"WAN '{wan_name}' not found in gateway status output.")
     except subprocess.CalledProcessError as e:
