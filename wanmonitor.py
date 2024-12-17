@@ -97,7 +97,7 @@ def check_wan_status():
                     LOSS_100_COUNTS[wan_name] = 0  # Reset 100% loss count if loss is not 100%
 
                 # Trigger actions based on thresholds
-                if average_loss > LOSS_THRESHOLD and current_status == "online":
+                if LOSS_THRESHOLD < average_loss < 100:
                     LOGGER.warning(f"{wan_name} average packet loss exceeds threshold ({average_loss:.2f}% > {LOSS_THRESHOLD}%)!")
                     if len(LOSS_HISTORY[wan_name]) == CONSECUTIVE_CHECKS:
                         restart_wan(wan_name)
