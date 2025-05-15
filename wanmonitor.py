@@ -94,6 +94,8 @@ def check_wan_status():
                 # If loss is exactly 100%, track it separately
                 if current_loss == 100.0:
                     LOSS_100_COUNTS[wan_name] += 1
+                elif current_loss == 0.0:
+                    reset_metrics(wan_name)  # Reset metrics when connection is perfect
                 else:
                     LOSS_100_COUNTS[wan_name] = 0  # Reset 100% loss count if loss is not 100%
                     INTERFACE_RESETS[wan_name] = 0  # something is happening...
@@ -108,11 +110,7 @@ def check_wan_status():
 
                 # if we've reset the interface 3 times already and average loss is still 100%, try to reset WAN again
                 elif average_loss == 100 and (INTERFACE_RESETS[wan_name] + 1) % 3 == 0:
-                    LOGGER.info(f"{wan_name} still appears down. Attempting to restart...")
-                    restart_wan(wan_name)
-                    reset_metrics(wan_name)
-                    INTERFACE_RESETS[wan_name] = 0
-                    time.sleep(180)
+                    reset_wan(wan_name)
 
                 # If 100% loss persists for consecutive checks, reset interface
                 elif LOSS_100_COUNTS[wan_name] >= CONSECUTIVE_CHECKS:
@@ -122,8 +120,19 @@ def check_wan_status():
                     time.sleep(30)
             else:
                 LOGGER.error(f"WAN '{wan_name}' not found in gateway status output.")
+                INTERFACE_RESETS[wan_name] += 1
+                if (INTERFACE_RESETS[wan_name] + 1) % 3 == 0:
+                    reset_wan(wan_name)
     except subprocess.CalledProcessError as e:
         LOGGER.error(f"Error executing gateway status command: {e}")
+
+
+def reset_wan(wan_name):
+    LOGGER.info(f"{wan_name} still appears down. Attempting to restart...")
+    restart_wan(wan_name)
+    reset_metrics(wan_name)
+    INTERFACE_RESETS[wan_name] = 0
+    time.sleep(180)
 
 
 def reset_metrics(wan_name):
