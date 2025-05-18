@@ -105,8 +105,9 @@ def check_wan_status():
                     LOGGER.warning(f"{wan_name} average packet loss exceeds threshold ({average_loss:.2f}% > {LOSS_THRESHOLD}%)!")
                     if len(LOSS_HISTORY[wan_name]) == CONSECUTIVE_CHECKS:
                         restart_wan(wan_name)
+                        time.sleep(60)
+                        release_renew_dhcp(wan_name)
                         reset_metrics(wan_name)
-                        time.sleep(180)
 
                 # if we've reset the interface 3 times already and average loss is still 100%, try to reset WAN again
                 elif average_loss == 100 and (INTERFACE_RESETS[wan_name] + 1) % 3 == 0:
