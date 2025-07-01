@@ -16,12 +16,11 @@ LOSS_HISTORY = deque()
 LOSS_100_COUNTS = []
 RESTART_WAN_COMMANDS = []
 RENEW_DHCP_COMMANDS = []
-INTERFACE_RESETS = []
 
 # Load configurations function
 def load_config():
     global WAN_NAMES, INTERVAL, LOSS_THRESHOLD, CONSECUTIVE_CHECKS, LOG_FILE, LOGGER, \
-        LOSS_HISTORY, LOSS_100_COUNTS, RESTART_WAN_COMMANDS, RENEW_DHCP_COMMANDS, INTERFACE_RESETS
+        LOSS_HISTORY, LOSS_100_COUNTS, RESTART_WAN_COMMANDS, RENEW_DHCP_COMMANDS
     config = configparser.ConfigParser()
     config.read('wanmonitor.ini')
 
@@ -34,7 +33,6 @@ def load_config():
     # Track sliding loss values for each WAN
     LOSS_HISTORY = {wan_name.strip(): deque(maxlen=CONSECUTIVE_CHECKS) for wan_name in WAN_NAMES}
     LOSS_100_COUNTS = {wan_name.strip(): 0 for wan_name in WAN_NAMES}
-    INTERFACE_RESETS = {wan_name.strip(): 0 for wan_name in WAN_NAMES}
 
     RESTART_WAN_COMMANDS = {wan_name.strip(): config[wan_name.strip()].get('restart_wan_command') if wan_name.strip() in config else f"echo 'restart_wan_command[{wan_name.strip()}] is not configured!" for wan_name in WAN_NAMES}
     RENEW_DHCP_COMMANDS = {wan_name.strip(): config[wan_name.strip()].get('renew_dhcp_command') if wan_name.strip() in config else f"echo 'renew_dhcp_command[{wan_name.strip()}] is not configured!" for wan_name in WAN_NAMES}
@@ -74,10 +72,7 @@ def check_wan_status():
     Executes the gateway status command and checks for packet loss on each specified WAN.
     """
     try:
-        result = subprocess.run(['/usr/local/sbin/pfSsh.php', 'playback', 'gatewaystatus'],
-                                capture_output=True, text=True, check=True)
-        LOGGER.debug("Gateway status output:\n" + result.stdout)
-        wan_status = {name: (loss, status) for name, loss, status in parse_gatewaystatus_output(result.stdout)}
+        wan_status = get_wan_statuses()
 
         for wan_name in WAN_NAMES:
             if wan_name in wan_status:
@@ -98,41 +93,52 @@ def check_wan_status():
                     reset_metrics(wan_name)  # Reset metrics when connection is perfect
                 else:
                     LOSS_100_COUNTS[wan_name] = 0  # Reset 100% loss count if loss is not 100%
-                    INTERFACE_RESETS[wan_name] = 0  # something is happening...
 
                 # Trigger actions based on thresholds
                 if LOSS_THRESHOLD < average_loss < 100:
                     LOGGER.warning(f"{wan_name} average packet loss exceeds threshold ({average_loss:.2f}% > {LOSS_THRESHOLD}%)!")
                     if len(LOSS_HISTORY[wan_name]) == CONSECUTIVE_CHECKS:
-                        restart_wan(wan_name)
-                        time.sleep(60)
-                        release_renew_dhcp(wan_name)
-                        reset_metrics(wan_name)
-
-                # if we've reset the interface 3 times already and average loss is still 100%, try to reset WAN again
-                elif average_loss == 100 and (INTERFACE_RESETS[wan_name] + 1) % 3 == 0:
-                    reset_wan(wan_name)
+                        toggle_wan(wan_name)
 
                 # If 100% loss persists for consecutive checks, reset interface
                 elif LOSS_100_COUNTS[wan_name] >= CONSECUTIVE_CHECKS:
-                    release_renew_dhcp(wan_name)
-                    reset_metrics(wan_name)
-                    INTERFACE_RESETS[wan_name] += 1
-                    time.sleep(30)
+                    toggle_wan(wan_name)
             else:
-                LOGGER.error(f"WAN '{wan_name}' not found in gateway status output.")
-                INTERFACE_RESETS[wan_name] += 1
-                if (INTERFACE_RESETS[wan_name] + 1) % 3 == 0:
-                    reset_wan(wan_name)
+                LOGGER.error(f"WAN '{wan_name}' not found in gateway status output. Resetting...")
+                toggle_wan(wan_name)
     except subprocess.CalledProcessError as e:
         LOGGER.error(f"Error executing gateway status command: {e}")
+
+
+def get_wan_statuses():
+    """
+    Looks up the gateway statuses and returns the {percent loss, status} of each WAN.
+    """
+    result = subprocess.run(['/usr/local/sbin/pfSsh.php', 'playback', 'gatewaystatus'],
+                            capture_output=True, text=True, check=True)
+    LOGGER.debug("Gateway status output:\n" + result.stdout)
+    wan_status = {name: (loss, status) for name, loss, status in parse_gatewaystatus_output(result.stdout)}
+    return wan_status
+
+
+def toggle_wan(wan_name):
+    reset_wan(wan_name)
+    time.sleep(60)
+    wan_status = get_wan_statuses()
+    if wan_name in wan_status:
+        current_loss, current_status = wan_status[wan_name]
+        if current_loss == 100.0 and current_status == "down":
+            LOGGER.info(f"Attempting to release and renew DHCP on {wan_name}...")
+            release_renew_dhcp(wan_name)
+    else:
+        LOGGER.error(f"Missing {wan_name} in list of statuses???")
+    reset_metrics(wan_name)
 
 
 def reset_wan(wan_name):
     LOGGER.info(f"{wan_name} still appears down. Attempting to restart...")
     restart_wan(wan_name)
     reset_metrics(wan_name)
-    INTERFACE_RESETS[wan_name] = 0
     time.sleep(180)
 
 
