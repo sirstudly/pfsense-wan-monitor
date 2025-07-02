@@ -127,6 +127,7 @@ def toggle_wan(wan_name):
     wan_status = get_wan_statuses()
     if wan_name in wan_status:
         current_loss, current_status = wan_status[wan_name]
+        LOGGER.info(f"Current packet loss for {wan_name}: {current_loss}% (Status: {current_status})")
         if current_loss == 100.0 and current_status == "down":
             LOGGER.info(f"Attempting to release and renew DHCP on {wan_name}...")
             release_renew_dhcp(wan_name)
@@ -136,7 +137,7 @@ def toggle_wan(wan_name):
 
 
 def reset_wan(wan_name):
-    LOGGER.info(f"{wan_name} still appears down. Attempting to restart...")
+    LOGGER.info(f"Attempting to restart {wan_name}...")
     restart_wan(wan_name)
     reset_metrics(wan_name)
     time.sleep(180)
