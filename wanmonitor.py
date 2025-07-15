@@ -140,7 +140,6 @@ def reset_wan(wan_name):
     LOGGER.info(f"Attempting to restart {wan_name}...")
     restart_wan(wan_name)
     reset_metrics(wan_name)
-    time.sleep(180)
 
 
 def reset_metrics(wan_name):
