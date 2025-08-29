@@ -1,0 +1,22 @@
+services:
+  wan-monitor:
+    build: .
+    container_name: pfsense-wan-monitor
+    restart: unless-stopped
+    volumes:
+      # Mount the configuration file from host
+      - ./wanmonitor.ini:/app/wanmonitor.ini:ro
+      # Mount logs directory for persistence
+      - ./logs:/app/logs
+    environment:
+      - PYTHONPATH=/app
+    network_mode: host
+    # Override command to run in foreground for testing
+    # command: ["python3", "wanmonitor.py"]
+    # Add healthcheck
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

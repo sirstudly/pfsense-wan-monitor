@@ -11,6 +11,7 @@ mkdir -p /usr/local/wanmonitor
 /usr/bin/fetch -o /usr/local/wanmonitor/wanmonitor.py https://raw.githubusercontent.com/sirstudly/pfsense-wan-monitor/refs/heads/master/wanmonitor.py
 /usr/bin/fetch -o /usr/local/wanmonitor/wanmonitor.ini https://raw.githubusercontent.com/sirstudly/pfsense-wan-monitor/refs/heads/master/wanmonitor.ini
 /usr/bin/fetch -o /usr/local/wanmonitor/renew_dhcp.sh https://raw.githubusercontent.com/sirstudly/pfsense-wan-monitor/refs/heads/master/renew_dhcp.sh
+/usr/bin/fetch -o /usr/local/wanmonitor/tapo_smart_plug.py https://raw.githubusercontent.com/sirstudly/pfsense-wan-monitor/refs/heads/master/tapo_smart_plug.py
 chmod +x /usr/local/wanmonitor/renew_dhcp.sh
 echo "Configure /usr/local/wanmonitor/wanmonitor.ini manually."
 
